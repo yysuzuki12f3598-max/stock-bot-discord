@@ -75,7 +75,7 @@ def check_amazon_stock_and_price():
 
 def send_discord_notification(current_price):
     data = {
-        "content": f"🚨 **【Amazon値下げ・入荷情報】**\nお目当ての商品が **{current_price}円** で購入可能です！（目標: {MAX_PRICE}円以下）\nURL: {AMAZON_URL}"
+        "content": f"**【Amazon値下げ・入荷情報】**\nお目当ての商品が **{current_price}円** で購入可能です！（目標: {MAX_PRICE}円以下）\nURL: {AMAZON_URL}"
     }
     requests.post(WEBHOOK_URL, json=data)
 
