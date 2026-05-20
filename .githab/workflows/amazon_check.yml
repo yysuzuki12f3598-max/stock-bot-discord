@@ -25,6 +25,5 @@ jobs:
       env:
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         AMAZON_URL: ${{ secrets.AMAZON_URL }}
-        # 💡 これを追記して、GitHubの設定値を取り込めるようにします
         MAX_PRICE: ${{ secrets.MAX_PRICE }}
       run: python main.py
