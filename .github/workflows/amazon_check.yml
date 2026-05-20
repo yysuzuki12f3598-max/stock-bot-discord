@@ -1,0 +1,29 @@
+name: Amazon Continuous Checker
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: 
+
+jobs:
+  check-stock:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install requests beautifulsoup4
+
+    - name: Run Python Script
+      env:
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        AMAZON_URL: ${{ secrets.AMAZON_URL }}
+        MAX_PRICE: ${{ secrets.MAX_PRICE }}
+      run: python main.py
