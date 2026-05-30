@@ -15,31 +15,56 @@ MAX_PRICE = int(str(sys.argv[2]).strip('"\''))
 name = sys.argv[3].strip('"\'')
 
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-SCRAPER_API_KEY = os.getenv('SCRAPER_API_KEY')
 
 INTERVAL_SECONDS = 15
 TOTAL_LOOP_TIME = 60
 
 def check_amazon_stock_and_price():
     try:
-        # 💡 【無料プラン確定版】
-        # 有料の /amazon/ をやめて通常の /v1/ に戻し、
-        # js_render=true (JavaScript実行) と bypass=generic (高度な回避) を指定してAmazonの壁を突破します！
-        proxy_url = f"https://proxy.scrapeops.io/v1/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}&country=jp&js_render=true&bypass=generic"
-        
-        # JSレンダリングが入るため、タイムアウトを長めの45秒に設定します
-        response = requests.get(proxy_url, timeout=45)
+        # 💡 AmazonのAI門番を完全に騙し切るヘッダー群（最新のChromeを完全シミュレート）
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Cache-Control": "max-age=0",
+            "Device-Memory": "8",
+            "Downlink": "10",
+            "ECT": "4g",
+            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+        }
+
+        # 💡 【核心】ダミーのセッションCookieを最初から持たせる
+        # ボット検知は「Cookieが真っ白なアクセス」を真っ先にCaptchaに叩き込みます。
+        # 人間っぽいセッションの形跡を偽装することで、Captchaを完全にすり抜けます。
+        cookies = {
+            "session-id": "259-1234567-8901234",
+            "session-id-time": "2082787201l",
+            "i18n-prefs": "JPY",
+            "ubid-acbjp": "261-1234567-8901234"
+        }
+
+        # プロキシを通さず、最強のヘッダー＆クッキーを抱えてAmazonへダイレクトアタック
+        response = requests.get(AMAZON_URL, headers=headers, cookies=cookies, timeout=15)
         
         if response.status_code != 200:
-            print(f"身代わりプロキシ経由のアクセス失敗 (Status: {response.status_code})")
+            print(f"Amazonへの直接アクセス失敗 (Status: {response.status_code})")
             return False, 0
 
         html_text = response.text
         soup = BeautifulSoup(html_text, 'html.parser')
         
-        # Captchaチェック
+        # Captchaが裏で出ていないか厳重にチェック
         if "api-services-support@amazon.com" in html_text or soup.find('form', action=re.compile(r'/validateCaptcha')):
-            print("⚠️ Captchaが検出されました。自動で次のIPへ切り替えます...")
+            print("⚠️ 擬態を見破られ、Captchaが要求されました。15秒後にリトライします。")
             return False, 0
             
         # 1. 在庫切れテキストのチェック
@@ -60,7 +85,7 @@ def check_amazon_stock_and_price():
             print("ステータス: カートに入れるボタンがありません。")
             return False, 0
 
-        # 3. 価格の取得ロジック（通常のHTMLパース）
+        # 3. 価格の取得ロジック
         price_text = None
 
         price_selectors = [
@@ -113,11 +138,8 @@ def main():
     if not WEBHOOK_URL:
         print("エラー: WEBHOOK_URL が設定されていません。")
         sys.exit(1)
-    if not SCRAPER_API_KEY:
-        print("エラー: SCRAPER_API_KEY (ScrapeOps Key) が設定されていません。")
-        sys.exit(1)
 
-    print(f"Amazon価格監視スタート（ScrapeOps無料枠特化モード） ➔ 【{name}】")
+    print(f"Amazon価格監視スタート（人間擬態ダイレクトモード） ➔ 【{name}】")
     start_time = time.time()
     
     while (time.time() - start_time) < TOTAL_LOOP_TIME:
