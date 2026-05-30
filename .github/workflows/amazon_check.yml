@@ -1,10 +1,8 @@
 name: Amazon Price Monitor
 
 on:
-  # 💡 定期実行スケジュール（30分おきなどに設定可能）
   schedule:
     - cron: '*/30 * * * *'
-  # 💡 GitHubの画面から手動でいつでも起動できるボタンを有効化
   workflow_dispatch:
 
 jobs:
@@ -12,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     
     strategy:
-      # 💡 trueにすると、1つの商品がエラー落ちした時に他の並列処理も道連れで止まってしまうので、必ずfalseにします
       fail-fast: false
       matrix:
         product: [
@@ -38,12 +35,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. Python環境のセットアップ
+    # 2. Python環境のセットアップ（💡 エラーの原因だったcache行を削除しました）
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'
 
     # 3. 必要なライブラリのインストール
     - name: Install dependencies
@@ -52,7 +48,6 @@ jobs:
         pip install requests beautifulsoup4
 
     # 4. パラレルでPythonスクリプトを実行
-    # 💡 引数の展開バグを防ぐため、シングルクォーテーションで厳重に囲ってPythonへ引き渡します
     - name: Run Price Monitor
       env:
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
