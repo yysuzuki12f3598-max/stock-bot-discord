@@ -22,16 +22,14 @@ TOTAL_LOOP_TIME = 60
 
 def check_amazon_stock_and_price():
     try:
-        # 💡 【超重要】Amazonの403を完全粉砕するScrapeOpsの確定版URL
-        # 通常の /v1/ から変更し、住宅用IP(residential)を指定します
-        proxy_url = f"https://proxy.scrapeops.io/v1/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}&residential=true&country=jp"
+        # 💡 【超重要】ScrapeOps公式ドキュメント推奨のAmazon専用エンドポイント
+        # 末尾を /v1/amazon/ に変更し、余計な residential パラメータを排除します
+        proxy_url = f"https://proxy.scrapeops.io/v1/amazon/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}&country=jp"
         
-        # タイムアウトを少し長めの30秒にして、プロキシの接続を確実に待ちます
         response = requests.get(proxy_url, timeout=30)
         
-        # 403が出た場合はログに詳細を出して、Amazonブロックかキーエラーかを即座に判別
         if response.status_code == 403:
-            print(f"ステータス: 403 Forbidden (ScrapeOpsの認証、またはAmazonの超厳重ブロックに接触中)")
+            print(f"ステータス: 403 Forbidden (ScrapeOps専用エンドポイントでも認証エラー。キーの空白等を確認してください)")
             return False, 0
         elif response.status_code != 200:
             print(f"身代わりプロキシ経由のアクセス失敗 (Status: {response.status_code})")
