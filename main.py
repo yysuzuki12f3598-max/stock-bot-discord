@@ -72,32 +72,31 @@ def main():
                 for tag, attrs in price_selectors:
                     price_element = soup.find(tag, attrs)
                     if price_element:
-                        # タグが見つかったら、その中身のテキスト（例: ￥2,246）を取得してループを抜ける
                         price_text = price_element.text
                         break
 
                 # 3. 価格が取得できた場合の判定処理
                 if price_text:
-                    # 数字以外の文字（¥ や カンマ）を綺麗に消し去る
+                    # 数字以外の文字を消し去る
                     price_number = int(re.sub(r'\D', '', price_text))
                     print(f"現在の価格: {price_number}円")
                     
-                    # 目標価格以下かどうかの判定
                     if price_number <= max_price:
-                        # Discordに送るメッセージの作成
                         data = {
                             "content": f"**【Amazon値下げ情報】**\n"
                                        f"**{name}** が **{price_number}円** で購入可能です！（目標: {max_price}円以下）\n"
                                        f"URL: {url}"
                         }
-                        # Webhookを叩く
                         requests.post(WEBHOOK_URL, json=data)
                         print("🎉 条件クリア！Discordに通知しました。")
-                        break  # 通知に成功したら5分待たずに即終了！
+                        break
                     else:
                         print("値下がり待ち...")
                 else:
-                    print("価格タグが見つかりませんでした。")
+                    # 💡 【デバッグ機能】価格が見つからない原因を特定するため、HTMLの頭を出力する
+                    print("❌ 価格タグが見つかりませんでした。Amazonから返ってきたHTMLの冒頭を出力します：")
+                    clean_html = re.sub(r'\s+', ' ', response.text)[:1200]
+                    print(f"【生ログ】: {clean_html}")
                     
         except Exception as e:
             print(f"通信エラー等が発生しました: {e}")
