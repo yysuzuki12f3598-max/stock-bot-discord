@@ -3,6 +3,7 @@ import os
 import time
 import re
 import requests
+import random
 from bs4 import BeautifulSoup
 
 # 1. GitHub Actionsからの引数受け取り
@@ -10,7 +11,6 @@ if len(sys.argv) < 4:
     print("エラー: 引数が足りません。[URL] [目標価格] [商品名] の順で指定してください。")
     sys.exit(1)
 
-# 💡 引数の前後に残る「"」や「'」を完全に削ぎ落とす
 AMAZON_URL = sys.argv[1].strip('"\'')
 MAX_PRICE = int(str(sys.argv[2]).strip('"\''))
 name = sys.argv[3].strip('"\'')
@@ -37,7 +37,7 @@ HEADERS = {
     "Upgrade-Insecure-Requests": "1"
 }
 
-INTERVAL_SECONDS = 10
+INTERVAL_SECONDS = 15  # ループ間隔を少しだけ広げて安定化
 TOTAL_LOOP_TIME = 60
 
 def check_amazon_stock_and_price():
@@ -50,6 +50,11 @@ def check_amazon_stock_and_price():
         html_text = response.text
         soup = BeautifulSoup(html_text, 'html.parser')
         
+        # ロボット判定（Captcha）の文言がHTMLに含まれていないか厳重チェック
+        if "api-services-support@amazon.com" in html_text or soup.find('form', action=re.compile(r'/validateCaptcha')):
+            print("⚠️ Amazonのロボット判定（Captcha）に引っかかりました。ページがブロックされています。")
+            return False, 0
+            
         # 1. 在庫切れテキストのチェック
         availability_div = soup.find('div', {'id': 'availability'})
         if availability_div and "現在在庫切れ" in availability_div.text:
@@ -141,6 +146,12 @@ def main():
         sys.exit(1)
 
     print(f"Amazon価格監視スタート ➔ 【{name}】")
+    
+    # 💡 【超重要】同時発射を回避するため、コンテナ起動時に1〜8秒のランダム待機を挟む
+    delay = random.uniform(1.0, 8.0)
+    print(f"🕵️ ステルス待機中（同時アクセス検知を回避するため {delay:.2f} 秒待機します...）")
+    time.sleep(delay)
+    
     start_time = time.time()
     
     while (time.time() - start_time) < TOTAL_LOOP_TIME:
