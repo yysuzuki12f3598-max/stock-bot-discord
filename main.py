@@ -16,12 +16,13 @@ name = sys.argv[3].strip('"\'')
 
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
+# 💡 Public無制限モードに最適化した、1分間集中ループ設定
 INTERVAL_SECONDS = 15
 TOTAL_LOOP_TIME = 60
 
 def check_amazon_stock_and_price():
     try:
-        # 💡 AmazonのAI門番を完全に騙し切るヘッダー群（最新のChromeを完全シミュレート）
+        # AmazonのAI門番を騙し切る最新ヘッダー群
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -30,9 +31,6 @@ def check_amazon_stock_and_price():
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
             "Cache-Control": "max-age=0",
-            "Device-Memory": "8",
-            "Downlink": "10",
-            "ECT": "4g",
             "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
             "Sec-Ch-Ua-Mobile": "?0",
             "Sec-Ch-Ua-Platform": '"Windows"',
@@ -42,9 +40,7 @@ def check_amazon_stock_and_price():
             "Sec-Fetch-User": "?1",
         }
 
-        # 💡 【核心】ダミーのセッションCookieを最初から持たせる
-        # ボット検知は「Cookieが真っ白なアクセス」を真っ先にCaptchaに叩き込みます。
-        # 人間っぽいセッションの形跡を偽装することで、Captchaを完全にすり抜けます。
+        # 人間っぽいセッションの形跡（ダミーCookie）を直書き偽装（Publicでも100%安全）
         cookies = {
             "session-id": "259-1234567-8901234",
             "session-id-time": "2082787201l",
@@ -52,7 +48,6 @@ def check_amazon_stock_and_price():
             "ubid-acbjp": "261-1234567-8901234"
         }
 
-        # プロキシを通さず、最強のヘッダー＆クッキーを抱えてAmazonへダイレクトアタック
         response = requests.get(AMAZON_URL, headers=headers, cookies=cookies, timeout=15)
         
         if response.status_code != 200:
@@ -62,9 +57,8 @@ def check_amazon_stock_and_price():
         html_text = response.text
         soup = BeautifulSoup(html_text, 'html.parser')
         
-        # Captchaが裏で出ていないか厳重にチェック
         if "api-services-support@amazon.com" in html_text or soup.find('form', action=re.compile(r'/validateCaptcha')):
-            print("⚠️ 擬態を見破られ、Captchaが要求されました。15秒後にリトライします。")
+            print("⚠️ 擬態を見破られ、Captchaが要求されました。次回の起動を待ちます。")
             return False, 0
             
         # 1. 在庫切れテキストのチェック
@@ -139,9 +133,10 @@ def main():
         print("エラー: WEBHOOK_URL が設定されていません。")
         sys.exit(1)
 
-    print(f"Amazon価格監視スタート（人間擬態ダイレクトモード） ➔ 【{name}】")
+    print(f"Amazon価格監視スタート（人間擬態ダイレクト・高頻度ループモード） ➔ 【{name}】")
     start_time = time.time()
     
+    # 💡 1分間、15秒おきに粘るループを復活
     while (time.time() - start_time) < TOTAL_LOOP_TIME:
         is_ok, current_price = check_amazon_stock_and_price()
         
