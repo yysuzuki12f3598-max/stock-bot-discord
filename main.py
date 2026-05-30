@@ -10,9 +10,10 @@ if len(sys.argv) < 4:
     print("エラー: 引数が足りません。[URL] [目標価格] [商品名] の順で指定してください。")
     sys.exit(1)
 
-AMAZON_URL = sys.argv[1]
-MAX_PRICE = int(sys.argv[2])
-name = sys.argv[3]
+# 💡 引数の前後に残る「"」や「'」を完全に削ぎ落とす
+AMAZON_URL = sys.argv[1].strip('"\'')
+MAX_PRICE = int(str(sys.argv[2]).strip('"\''))
+name = sys.argv[3].strip('"\'')
 
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
@@ -55,7 +56,7 @@ def check_amazon_stock_and_price():
             print("ステータス: 現在在庫切れです。")
             return False, 0
 
-        # 2. カートボタンのチェック（💡 PC版・スマホ版のあらゆる形状を無条件で全スキャン）
+        # 2. カートボタンのチェック
         add_to_cart_button = soup.find(['input', 'button', 'a'], {'id': 'add-to-cart-button'})
         
         if not add_to_cart_button:
@@ -68,10 +69,10 @@ def check_amazon_stock_and_price():
             print("ステータス: カートに入れるボタンがありません。")
             return False, 0
 
-        # 3. 価格の取得ロジック（💡 全ルートをフラットに絨毯爆撃）
+        # 3. 価格の取得ロジック
         price_text = None
 
-        # 【ルートA】通常のHTMLタグから探す（PC版基本タグ）
+        # 【ルートA】通常のHTMLタグから探す
         price_selectors = [
             ('span', {'class': 'a-price-whole'}),
             ('span', {'id': 'priceblock_ourprice'}),
@@ -85,7 +86,7 @@ def check_amazon_stock_and_price():
                 price_text = re.sub(r'\D', '', el.text)
                 break
 
-        # 【ルートB】カートボタンの親フォーム内から数字をぶっこ抜く（スマホ版の隠し要素対策）
+        # 【ルートB】カートボタンの親フォーム内から数字をぶっこ抜く
         if not price_text and add_to_cart_button:
             form = add_to_cart_button.find_parent('form')
             if form:
@@ -98,7 +99,7 @@ def check_amazon_stock_and_price():
                         if 'price' in name_attr or 'amount' in name_attr:
                             break
 
-        # 【ルートC】HTML全体の生テキストから「￥・¥数字」のパターンを直接抽出
+        # 【ルートC】HTML全体の生テキストからスキャン
         if not price_text:
             price_candidates = re.findall(r'(?:￥|¥)\s*([\d,]+)', html_text)
             for candidate in price_candidates:
