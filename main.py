@@ -44,7 +44,7 @@ def main():
     
     start_time = time.time()
     
-    # テスト用：1分間（60秒）の短期決戦
+    # 1分間（60秒）の短期決戦
     #while (time.time() - start_time) < 300:
     while (time.time() - start_time) < 60: #debug
         try:
@@ -58,38 +58,48 @@ def main():
             else:
                 price_number = None
 
-                # 【アプローチ1】通常のHTMLタグから探す（PC版や一部のモバイル版）
-                price_selectors = [
-                    ('span', {'class': 'a-price-whole'}),
-                    ('span', {'class': 'a-color-price'}),
-                    ('span', {'class': 'price-large'})
-                ]
-                for tag, attrs in price_selectors:
-                    el = soup.find(tag, attrs)
-                    if el and re.sub(r'\D', '', el.text):
-                        price_number = int(re.sub(r'\D', '', el.text))
-                        break
+                # 💡 【アプローチ1】発見してもらったカートボタンの周辺（formなど）から紐解く
+                cart_button = soup.find(id="add-to-cart-button")
+                if cart_button:
+                    # カートボタンを含む親フォームを取得
+                    form = cart_button.find_parent('form')
+                    if form:
+                        # フォーム内の非表示データ（価格や値引き情報）を全探索
+                        for hidden_input in form.find_all('input', type='hidden'):
+                            val = hidden_input.get('value', '')
+                            # 3〜5桁の純粋な数字（価格っぽいもの）を抽出
+                            if val.isdigit() and 300 <= int(val) <= 50000:
+                                price_number = int(val)
+                                break
 
-                # 【アプローチ2】HTML内のJavaScriptに埋め込まれた価格データを正規表現で直接引っこ抜く（スマホ版の遅延対策）
+                # 【アプローチ2】通常のHTMLタグ（予備）
                 if not price_number:
-                    # スクリプト等に書かれた価格パターン（例: "buyingPrice":2246 や "priceAmount":2246 など）を抽出
-                    patterns = [
-                        r'"buyingPrice"\s*:\s*(\d+)',
-                        r'"priceAmount"\s*:\s*(\d+)',
-                        r'"displayPrice"\s*:\s*"￥?([\d,]+)"',
-                        r'"price"\s*:\s*(\d+)'
+                    price_selectors = [
+                        ('span', {'class': 'a-price-whole'}),
+                        ('span', {'class': 'a-color-price'}),
+                        ('span', {'id': 'corePrice_desktop'}),
+                        ('div', {'id': 'corePrice_mobile_feature_div'})
                     ]
-                    for pattern in patterns:
-                        match = re.search(pattern, html_text)
-                        if match:
-                            raw_val = match.group(1)
-                            price_number = int(re.sub(r'\D', '', raw_val))
-                            if price_number > 0:
+                    for tag, attrs in price_selectors:
+                        el = soup.find(tag, attrs)
+                        if el and re.sub(r'\D', '', el.text):
+                            price_number = int(re.sub(r'\D', '', el.text))
+                            break
+
+                # 【アプローチ3】HTML全体から「￥・¥数字」のパターン（最終予備）
+                if not price_number:
+                    price_candidates = re.findall(r'(?:￥|¥)\s*([\d,]+)', html_text)
+                    for candidate in price_candidates:
+                        num_str = re.sub(r'\D', '', candidate)
+                        if num_str:
+                            num = int(num_str)
+                            if 300 <= num <= 50000:
+                                price_number = num
                                 break
 
                 # 3. 判定判定
-                if price_number and price_number > 0:
-                    print(f"現在の価格: {price_number}円")
+                if price_number:
+                    print(f"現在の価格（カート周辺検出）: {price_number}円")
                     
                     if price_number <= max_price:
                         data = {
@@ -99,7 +109,7 @@ def main():
                         }
                         requests.post(WEBHOOK_URL, json=data)
                         print("🎉 条件クリア！Discordに通知しました。")
-                        return  # 💡 1分待たずに即終了！
+                        return  # 1分待たずに即終了！
                     else:
                         print("値下がり待ち...")
                 else:
@@ -108,7 +118,6 @@ def main():
         except Exception as e:
             print(f"通信エラー等が発生しました: {e}")
             
-        # テスト用：10秒待機
         #time.sleep(30)
         time.sleep(10) #debug
 
