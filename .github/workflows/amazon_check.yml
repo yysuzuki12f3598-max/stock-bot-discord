@@ -9,6 +9,11 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     
+    # 💡 ジョブ全体で使う環境変数をここで一括宣言します。これで100%Python側に伝わります！
+    env:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+      SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+    
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +40,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. Python環境のセットアップ（💡 エラーの原因だったcache行を削除しました）
+    # 2. Python環境のセットアップ
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -49,7 +54,5 @@ jobs:
 
     # 4. パラレルでPythonスクリプトを実行
     - name: Run Price Monitor
-      env:
-        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
       run: |
         python main.py '${{ matrix.product.url }}' '${{ matrix.product.max_price }}' '${{ matrix.product.name }}'
