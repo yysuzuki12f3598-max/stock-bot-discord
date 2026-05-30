@@ -12,9 +12,9 @@ jobs:
       # 💡 これがキモ：URLの数だけ完全に独立したコンテナ（PC）が同時に立ち上がります
       matrix:
         product: [
-          { name: "ブラキオウィップセレクト", url: "https://www.amazon.co.jp/gp/aw/d/B0H1B5QDJK", max_price: 1600 },
-          { name: "ランダムブースター V10", url: "https://www.amazon.co.jp/gp/aw/d/B0GWKWBXH3", max_price: 1600 },
-          { name: "テスト", url: "https://www.amazon.co.jp/gp/aw/d/B004Y9IXZW", max_price: 99999 }
+          { name: "ブラキオウィップセレクト", url: "https://www.amazon.co.jp/gp/product/B0H1B5QDJK", max_price: 1600 },
+          { name: "ランダムブースター V10", url: "https://www.amazon.co.jp/gp/product/B0GWKWBXH3", max_price: 1600 },
+          { name: "テスト", url: "https://www.amazon.co.jp/gp/product/B004Y9IXZW", max_price: 99999 }
         ]
     steps:
     - name: Checkout code
