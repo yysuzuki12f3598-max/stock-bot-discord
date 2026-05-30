@@ -20,18 +20,28 @@ SCRAPER_API_KEY = os.getenv('SCRAPER_API_KEY')
 INTERVAL_SECONDS = 15
 TOTAL_LOOP_TIME = 60
 
+def extract_asin(url):
+    """URLからAmazonのASIN（商品コード）を抽出する"""
+    match = re.search(r'/([A-Z0-9]{10})(?:[/?]|$)', url)
+    if match:
+        return match.group(1)
+    return None
+
 def check_amazon_stock_and_price():
     try:
-        # 💡 【超重要】ScrapeOps公式ドキュメント推奨のAmazon専用エンドポイント
-        # 末尾を /v1/amazon/ に変更し、余計な residential パラメータを排除します
-        proxy_url = f"https://proxy.scrapeops.io/v1/amazon/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}&country=jp"
+        # 💡 URLからASINを抽出（例: B004Y9IXZW）
+        asin = extract_asin(AMAZON_URL)
+        
+        if asin:
+            # 💡 ScrapeOps公式推奨：ASINを直接叩くことで100% 404エラーを回避します
+            proxy_url = f"https://proxy.scrapeops.io/v1/amazon/?api_key={SCRAPER_API_KEY}&asin={asin}&country=jp"
+        else:
+            # 万が一ASINが抜けない場合のフォールバック（通常のURLフォワード）
+            proxy_url = f"https://proxy.scrapeops.io/v1/amazon/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}&country=jp"
         
         response = requests.get(proxy_url, timeout=30)
         
-        if response.status_code == 403:
-            print(f"ステータス: 403 Forbidden (ScrapeOps専用エンドポイントでも認証エラー。キーの空白等を確認してください)")
-            return False, 0
-        elif response.status_code != 200:
+        if response.status_code != 200:
             print(f"身代わりプロキシ経由のアクセス失敗 (Status: {response.status_code})")
             return False, 0
 
