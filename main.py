@@ -14,7 +14,6 @@ AMAZON_URL = sys.argv[1].strip('"\'')
 MAX_PRICE = int(str(sys.argv[2]).strip('"\''))
 name = sys.argv[3].strip('"\'')
 
-# 💡 yamlファイルから安全に環境変数をインジェクション（注入）します
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 SCRAPER_API_KEY = os.getenv('SCRAPER_API_KEY')
 
@@ -23,8 +22,8 @@ TOTAL_LOOP_TIME = 60
 
 def check_amazon_stock_and_price():
     try:
-        # ScrapeOps専用のエンドポイントURLに変換
-        proxy_url = f"https://proxy.scrapeops.io/v1/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}"
+        # 💡 ScrapeOpsでAmazonを確実にぶち抜くための決定版パラメータ（country=jp & residential=true）
+        proxy_url = f"https://proxy.scrapeops.io/v1/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}&country=jp&residential=true"
         
         response = requests.get(proxy_url, timeout=30)
         
@@ -36,7 +35,7 @@ def check_amazon_stock_and_price():
         soup = BeautifulSoup(html_text, 'html.parser')
         
         if "api-services-support@amazon.com" in html_text or soup.find('form', action=re.compile(r'/validateCaptcha')):
-            print("⚠️ Captchaが検出されました。IPを切り替えて自動再試行します...")
+            print("⚠️ Captchaが検出されました。")
             return False, 0
             
         # 1. 在庫切れテキストのチェック
