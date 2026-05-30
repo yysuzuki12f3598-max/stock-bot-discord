@@ -8,6 +8,14 @@ on:
 jobs:
   check-stock:
     runs-on: ubuntu-latest
+    strategy:
+      # 💡 これがキモ：URLの数だけ完全に独立したコンテナ（PC）が同時に立ち上がります
+      matrix:
+        product: [
+          { name: "ブラキオウィップセレクト", url: "https://www.amazon.co.jp/dp/B0H1B5QDJK", max_price: 1600 },
+          { name: "ランダムブースター V10", url: "https://www.amazon.co.jp/dp/B0GWKWBXH3", max_price: 1600 },
+          { name: "テスト", url: "https://www.amazon.co.jp/dp/B004Y9IXZW", max_price: 99999 }
+        ]
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -18,11 +26,10 @@ jobs:
         python-version: '3.11'
 
     - name: Install dependencies
-      run: |
-        pip install requests beautifulsoup4
+      run: pip install requests beautifulsoup4
 
     - name: Run Python Script
       env:
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        WATCH_LIST: ${{ secrets.WATCH_LIST }}
-      run: python main.py
+      # 💡 分割された各コンテナが、自分の担当する商品の引数を持ってmain.pyを叩きます
+      run: python main.py "${{ matrix.product.url }}" "${{ matrix.product.max_price }}" "${{ matrix.product.name }}"
