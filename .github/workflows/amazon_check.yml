@@ -14,7 +14,7 @@ jobs:
         product: [
           { name: "ブラキオウィップセレクト", url: "https://www.amazon.co.jp/gp/aw/d/B0H1B5QDJK", max_price: 1600 },
           { name: "ランダムブースター V10", url: "https://www.amazon.co.jp/gp/aw/d/B0GWKWBXH3", max_price: 1600 },
-          { name: "テスト", url: "https://www.amazon.co.jp/gp/aw/d/B004Y9IXZW", max_price: 99999 }
+          { name: "テスト", url: "https://www.amazon.co.jp/dp/B004Y9IXZW", max_price: 99999 }
         ]
     steps:
     - name: Checkout code
