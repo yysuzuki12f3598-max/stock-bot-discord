@@ -4,6 +4,26 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
+# Amazonのロボット判定を徹底的に回避する強力なヘッダー設定
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Device-Memory": "8",
+    "Downlink": "10",
+    "ECT": "4g",
+    "RTT": "50",
+    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1"
+}
+
 # GitHubの「Secrets」から安全に読み込みます
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 AMAZON_URL = os.getenv('AMAZON_URL')
@@ -12,11 +32,6 @@ MAX_PRICE = int(os.getenv('MAX_PRICE', '1600'))
 
 INTERVAL_SECONDS = 30 
 TOTAL_LOOP_TIME = 300 
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"
-}
 
 def check_amazon_stock_and_price():
     try:
@@ -55,7 +70,7 @@ def check_amazon_stock_and_price():
                 break
 
         if not price_text:
-            print("ステータs: カートはありますが、価格が読み取れませんでした。")
+            print("ステータス: カートはありますが、価格が読み取れませんでした。")
             return False, 0
 
         # 「￥1,600」などの文字から数字だけを抽出して整数(int)に変換
