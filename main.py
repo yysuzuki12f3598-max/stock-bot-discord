@@ -14,10 +14,9 @@ AMAZON_URL = sys.argv[1].strip('"\'')
 MAX_PRICE = int(str(sys.argv[2]).strip('"\''))
 name = sys.argv[3].strip('"\'')
 
+# 💡 yamlファイルから安全に環境変数をインジェクション（注入）します
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-
-# 💡 【ここに直接貼り付け！】ScrapeOpsからコピーしたAPIキーを直接書き込みます
-SCRAPER_API_KEY = 'ここにScrapeOpsのAPIキーを貼り付け'
+SCRAPER_API_KEY = os.getenv('SCRAPER_API_KEY')
 
 INTERVAL_SECONDS = 15
 TOTAL_LOOP_TIME = 60
@@ -115,8 +114,8 @@ def main():
     if not WEBHOOK_URL:
         print("エラー: WEBHOOK_URL が設定されていません。")
         sys.exit(1)
-    if not SCRAPER_API_KEY or SCRAPER_API_KEY == 'ここにScrapeOpsのAPIキーを貼り付け':
-        print("エラー: SCRAPER_API_KEY が正しくコードに直書きされていません。")
+    if not SCRAPER_API_KEY:
+        print("エラー: SCRAPER_API_KEY (ScrapeOps Key) が設定されていません。")
         sys.exit(1)
 
     print(f"Amazon価格監視スタート（ScrapeOpsバイパスモード） ➔ 【{name}】")
