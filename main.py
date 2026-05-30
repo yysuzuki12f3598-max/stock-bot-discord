@@ -3,10 +3,9 @@ import os
 import time
 import re
 import requests
-import random
 from bs4 import BeautifulSoup
 
-# 1. GitHub Actionsからの引数受け取り
+# 1. 引数の受け取り
 if len(sys.argv) < 4:
     print("エラー: 引数が足りません。[URL] [目標価格] [商品名] の順で指定してください。")
     sys.exit(1)
@@ -15,44 +14,32 @@ AMAZON_URL = sys.argv[1].strip('"\'')
 MAX_PRICE = int(str(sys.argv[2]).strip('"\''))
 name = sys.argv[3].strip('"\'')
 
+# SecretsからDiscordのURLと、ScrapeOpsのAPIキー（変数名はそのまま流用）を読み込み
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+SCRAPER_API_KEY = os.getenv('SCRAPER_API_KEY')
 
-# Amazonを完全に沈黙させた最強の回線・マシン偽装ヘッダー
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Device-Memory": "8",
-    "Downlink": "10",
-    "ECT": "4g",
-    "RTT": "50",
-    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1"
-}
-
-INTERVAL_SECONDS = 15  # ループ間隔を少しだけ広げて安定化
+INTERVAL_SECONDS = 15
 TOTAL_LOOP_TIME = 60
 
 def check_amazon_stock_and_price():
     try:
-        response = requests.get(AMAZON_URL, headers=HEADERS, timeout=10)
+        # 💡 【重要】ScrapeOps専用のエンドポイントURLに変換します
+        # これにより、Amazonには日本の一般家庭からアクセスしているように見えます
+        proxy_url = f"https://proxy.scrapeops.io/v1/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}"
+        
+        # ScrapeOps側が完璧なブラウザヘッダーを自動付与するため、リクエストは最少構成で投げます
+        response = requests.get(proxy_url, timeout=30)
+        
         if response.status_code != 200:
-            print(f"Amazonアクセス失敗 (Status: {response.status_code})")
+            print(f"身代わりプロキシ経由のアクセス失敗 (Status: {response.status_code})")
             return False, 0
 
         html_text = response.text
         soup = BeautifulSoup(html_text, 'html.parser')
         
-        # ロボット判定（Captcha）の文言がHTMLに含まれていないか厳重チェック
+        # Captchaページに飛ばされていないか厳重チェック
         if "api-services-support@amazon.com" in html_text or soup.find('form', action=re.compile(r'/validateCaptcha')):
-            print("⚠️ Amazonのロボット判定（Captcha）に引っかかりました。ページがブロックされています。")
+            print("⚠️ Captchaが検出されました。IPを切り替えて自動再試行します...")
             return False, 0
             
         # 1. 在庫切れテキストのチェック
@@ -63,7 +50,6 @@ def check_amazon_stock_and_price():
 
         # 2. カートボタンのチェック
         add_to_cart_button = soup.find(['input', 'button', 'a'], {'id': 'add-to-cart-button'})
-        
         if not add_to_cart_button:
             add_to_cart_button = soup.find(lambda tag: tag.name in ['input', 'button', 'span', 'a'] and (
                 (tag.get('id') in ['add-to-cart-button', 'add-to-cart-button-ubb', 'smartBuyingAddToCart_feature_div']) or
@@ -74,7 +60,7 @@ def check_amazon_stock_and_price():
             print("ステータス: カートに入れるボタンがありません。")
             return False, 0
 
-        # 3. 価格の取得ロジック
+        # 3. 価格の取得ロジック（PC・スマホ画面の両対応）
         price_text = None
 
         # 【ルートA】通常のHTMLタグから探す
@@ -91,20 +77,7 @@ def check_amazon_stock_and_price():
                 price_text = re.sub(r'\D', '', el.text)
                 break
 
-        # 【ルートB】カートボタンの親フォーム内から数字をぶっこ抜く
-        if not price_text and add_to_cart_button:
-            form = add_to_cart_button.find_parent('form')
-            if form:
-                for hidden_input in form.find_all('input', type='hidden'):
-                    name_attr = hidden_input.get('name', '').lower()
-                    val = hidden_input.get('value', '')
-                    clean_val = re.sub(r'\D', '', val)
-                    if clean_val and (300 <= int(clean_val) <= 200000):
-                        price_text = clean_val
-                        if 'price' in name_attr or 'amount' in name_attr:
-                            break
-
-        # 【ルートC】HTML全体の生テキストからスキャン
+        # 【ルートB】全体の生テキストから「￥・¥数字」のパターンを直接抽出
         if not price_text:
             price_candidates = re.findall(r'(?:￥|¥)\s*([\d,]+)', html_text)
             for candidate in price_candidates:
@@ -144,14 +117,11 @@ def main():
     if not WEBHOOK_URL:
         print("エラー: WEBHOOK_URL が設定されていません。")
         sys.exit(1)
+    if not SCRAPER_API_KEY:
+        print("エラー: SCRAPER_API_KEY (ScrapeOps Key) が設定されていません。")
+        sys.exit(1)
 
-    print(f"Amazon価格監視スタート ➔ 【{name}】")
-    
-    # 💡 【超重要】同時発射を回避するため、コンテナ起動時に1〜8秒のランダム待機を挟む
-    delay = random.uniform(1.0, 8.0)
-    print(f"🕵️ ステルス待機中（同時アクセス検知を回避するため {delay:.2f} 秒待機します...）")
-    time.sleep(delay)
-    
+    print(f"Amazon価格監視スタート（ScrapeOpsバイパスモード） ➔ 【{name}】")
     start_time = time.time()
     
     while (time.time() - start_time) < TOTAL_LOOP_TIME:
