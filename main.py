@@ -17,7 +17,7 @@ name = sys.argv[3]
 # GitHubの「Secrets」からWebhookだけを安全に読み込みます
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
-# 💡 Amazonのロボット判定を100%黙らせた最強の回線偽装ヘッダー
+# Amazonのロボット判定を100%黙らせた最強の回線偽装ヘッダー
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -37,9 +37,9 @@ HEADERS = {
     "Upgrade-Insecure-Requests": "1"
 }
 
-# テスト用に調整しやすいよう変数化（本番運用時はここを30秒/300秒とかに戻せます）
-INTERVAL_SECONDS = 10  # テスト用：10秒おきにチェック
-TOTAL_LOOP_TIME = 60   # テスト用：1分間でタイムアップ
+# テスト用：10秒おきに1分間チェック
+INTERVAL_SECONDS = 10
+TOTAL_LOOP_TIME = 60
 
 def check_amazon_stock_and_price():
     try:
@@ -56,8 +56,16 @@ def check_amazon_stock_and_price():
             print("ステータス: 現在在庫切れです。")
             return False, 0
 
-        # 2. カートボタンのチェック（Yuyaさんが見つけた勝利の鍵）
+        # 2. カートボタンのチェック（スマホ版・PC版の両対応）
         add_to_cart_button = soup.find(['input', 'button', 'a'], {'id': 'add-to-cart-button'})
+        
+        # スマホ用の別IDやクラス名でも再検索
+        if not add_to_cart_button:
+            add_to_cart_button = soup.find(lambda tag: tag.name in ['input', 'button', 'span', 'a'] and (
+                (tag.get('id') in ['add-to-cart-button', 'add-to-cart-button-ubb', 'smartBuyingAddToCart_feature_div']) or
+                (tag.get('class') and any(cls in tag.get('class') for cls in ['atc-button-element', 'a-button-input']))
+            ))
+
         if not add_to_cart_button:
             print("ステータス: カートに入れるボタンがありません。")
             return False, 0
@@ -68,7 +76,8 @@ def check_amazon_stock_and_price():
             ('span', {'class': 'a-price-whole'}),
             ('span', {'id': 'priceblock_ourprice'}),
             ('span', {'id': 'priceblock_dealprice'}),
-            ('span', {'class': 'a-color-price'})
+            ('span', {'class': 'a-color-price'}),
+            ('span', {'class': 'price-large'})
         ]
         
         for tag, attrs in price_selectors:
@@ -77,12 +86,22 @@ def check_amazon_stock_and_price():
                 price_text = price_element.text
                 break
 
+        # カートボタンの親要素から無理やり探す予備ルート
+        if not price_text and add_to_cart_button:
+            form = add_to_cart_button.find_parent('form')
+            if form:
+                for hidden_input in form.find_all('input', type='hidden'):
+                    val = hidden_input.get('value', '')
+                    if val.isdigit() and 300 <= int(val) <= 50000:
+                        price_text = val
+                        break
+
         if not price_text:
             print("ステータス: カートはありますが、価格が読み取れませんでした。")
             return False, 0
 
         # 数字だけを抽出して整数(int)に変換
-        price_number = int(re.sub(r'\D', '', price_text))
+        price_number = int(re.sub(r'\D', '', str(price_text)))
         print(f"現在の価格: {price_number}円 (目標: {MAX_PRICE}円以下)")
 
         # 4. 価格の判定
@@ -118,7 +137,7 @@ def main():
         if is_ok:
             send_discord_notification(current_price)
             print("🎉 条件クリア！Discordに通知しました。")
-            break  # 💡 ピコリンしたら5分待たずに即終了！
+            break
             
         time.sleep(INTERVAL_SECONDS)
 
