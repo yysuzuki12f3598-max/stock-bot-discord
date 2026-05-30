@@ -1,10 +1,23 @@
-import os
 import sys
-import time
 import re
+import time
 import requests
 from bs4 import BeautifulSoup
 
+# 引数の受け取り
+if len(sys.argv) < 4:
+    print("エラー: 引数が足りません。 [URL] [目標価格] [商品名] の順で指定してください。")
+    sys.exit(1)
+
+url = sys.argv[1]
+max_price = int(sys.argv[2])
+name = sys.argv[3]
+
+# DiscordのWebhook URL（GitHub Secretsから渡される想定）
+import os
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
+
+# 本物のWindows Chromeブラウザ＋日本語環境にガチガチに偽装するヘッダー
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -23,54 +36,73 @@ HEADERS = {
     "Cache-Control": "no-cache"
 }
 
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-
 def main():
-    if len(sys.argv) < 4:
-        print("引数が足りません。")
-        return
-    
-    url = sys.argv[1]
-    max_price = int(sys.argv[2])
-    name = sys.argv[3]
+    if not WEBHOOK_URL:
+        print("エラー: WEBHOOK_URL が環境変数に設定されていません。")
+        sys.exit(1)
 
     print(f"Amazon価格監視スタート ➔ 【{name}】（目標: {max_price}円以下）")
     
     start_time = time.time()
-    # 5分間（300秒）ループ
+    
+    # 5分間（300秒）ループする
     while (time.time() - start_time) < 300:
         try:
-            # キャッシュ対策
-            target_url = f"{url}&_ts={int(time.time())}" if "?" in url else f"{url}?_ts={int(time.time())}"
-            response = requests.get(target_url, headers=HEADERS, timeout=15)
+            # タイムアウトは15秒に設定
+            response = requests.get(url, headers=HEADERS, timeout=15)
             
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
+            # HTMLを解析
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 1. ロボット判定（Captcha）の厳重チェック
+            if "api-services-support@amazon.com" in response.text or soup.find('form', action=re.compile(r'/validateCaptcha')):
+                print("⚠️ Amazonのロボット判定にブロックされました。再試行します。")
+            else:
+                # 2. スマホ版・PC版のあらゆる価格タグを絨毯爆撃で探す
+                price_text = None
+                price_selectors = [
+                    ('span', {'class': 'a-price-whole'}),           # PC版基本
+                    ('span', {'class': 'a-color-price'}),           # モバイル版・セール価格
+                    ('span', {'id': 'priceblock_ourprice'}),        # 旧世代の定番
+                    ('span', {'id': 'priceblock_dealprice'}),       # 特価用
+                    ('div', {'id': 'corePrice_mobile_feature_div'}), # モバイル特有のエリア
+                    ('span', {'class': 'price-large'})              # 予備
+                ]
                 
-                # ボット判定チェック
-                if "api-services-support@amazon.com" in response.text or soup.find('form', action=re.compile(r'/validateCaptcha')):
-                    print(f"⚠️ Amazonのロボット判定にブロックされました。再試行します。")
-                else:
-                    # 価格の取得
-                    price_element = soup.find('span', {'class': 'a-price-whole'})
+                for tag, attrs in price_selectors:
+                    price_element = soup.find(tag, attrs)
                     if price_element:
-                        price_number = int(re.sub(r'\D', '', price_element.text))
-                        print(f"現在の価格: {price_number}円")
-                        
-                        if price_number <= max_price:
-                            # Discordへ通知
-                            data = {"content": f"**【Amazon値下げ情報】**\n**{name}** が **{price_number}円** で購入可能です！（目標: {max_price}円以下）\nURL: {url}"}
-                            requests.post(WEBHOOK_URL, json=data)
-                            print("🎉 条件クリア！Discordに通知しました。")
-                            break
-                        else:
-                            print("値下がり待ち...")
+                        # タグが見つかったら、その中身のテキスト（例: ￥2,246）を取得してループを抜ける
+                        price_text = price_element.text
+                        break
+
+                # 3. 価格が取得できた場合の判定処理
+                if price_text:
+                    # 数字以外の文字（¥ や カンマ）を綺麗に消し去る
+                    price_number = int(re.sub(r'\D', '', price_text))
+                    print(f"現在の価格: {price_number}円")
+                    
+                    # 目標価格以下かどうかの判定
+                    if price_number <= max_price:
+                        # Discordに送るメッセージの作成
+                        data = {
+                            "content": f"**【Amazon値下げ情報】**\n"
+                                       f"**{name}** が **{price_number}円** で購入可能です！（目標: {max_price}円以下）\n"
+                                       f"URL: {url}"
+                        }
+                        # Webhookを叩く
+                        requests.post(WEBHOOK_URL, json=data)
+                        print("🎉 条件クリア！Discordに通知しました。")
+                        break  # 通知に成功したら5分待たずに即終了！
                     else:
-                        print("価格タグが見つかりませんでした。")
-                        
+                        print("値下がり待ち...")
+                else:
+                    print("価格タグが見つかりませんでした。")
+                    
         except Exception as e:
-            print(f"エラー発生: {e}")
+            print(f"通信エラー等が発生しました: {e}")
             
+        # 30秒待機して次の周回へ
         time.sleep(30)
 
 if __name__ == "__main__":
