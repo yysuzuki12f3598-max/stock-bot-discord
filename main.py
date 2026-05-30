@@ -59,7 +59,6 @@ def check_amazon_stock_and_price():
         # 2. カートボタンのチェック（スマホ版・PC版の両対応）
         add_to_cart_button = soup.find(['input', 'button', 'a'], {'id': 'add-to-cart-button'})
         
-        # スマホ用の別IDやクラス名でも再検索
         if not add_to_cart_button:
             add_to_cart_button = soup.find(lambda tag: tag.name in ['input', 'button', 'span', 'a'] and (
                 (tag.get('id') in ['add-to-cart-button', 'add-to-cart-button-ubb', 'smartBuyingAddToCart_feature_div']) or
@@ -70,38 +69,47 @@ def check_amazon_stock_and_price():
             print("ステータス: カートに入れるボタンがありません。")
             return False, 0
 
-        # 3. 価格の取得（複数のパターンに対応）
+        # 3. 価格の取得ロジック
         price_text = None
-        price_selectors = [
-            ('span', {'class': 'a-price-whole'}),
-            ('span', {'id': 'priceblock_ourprice'}),
-            ('span', {'id': 'priceblock_dealprice'}),
-            ('span', {'class': 'a-color-price'}),
-            ('span', {'class': 'price-large'})
-        ]
-        
-        for tag, attrs in price_selectors:
-            price_element = soup.find(tag, attrs)
-            if price_element and re.sub(r'\D', '', price_element.text):
-                price_text = price_element.text
-                break
 
-        # カートボタンの親要素から無理やり探す予備ルート
-        if not price_text and add_to_cart_button:
-            form = add_to_cart_button.find_parent('form')
-            if form:
-                for hidden_input in form.find_all('input', type='hidden'):
-                    val = hidden_input.get('value', '')
-                    if val.isdigit() and 300 <= int(val) <= 50000:
-                        price_text = val
-                        break
+        # 💡 【超強力ルート】見つかったカートボタンの親フォーム内にあるhidden要素から数字をぶっこ抜く
+        form = add_to_cart_button.find_parent('form')
+        if form:
+            for hidden_input in form.find_all('input', type='hidden'):
+                name_attr = hidden_input.get('name', '').lower()
+                val = hidden_input.get('value', '')
+                
+                # 数字以外のノイズ（カンマなど）を消去
+                clean_val = re.sub(r'\D', '', val)
+                
+                # フォーム内の価格関連のヒント、またはまともな価格帯の数字があれば採用
+                if clean_val and (300 <= int(clean_val) <= 200000):
+                    if 'price' in name_attr or 'amount' in name_attr or not price_text:
+                        price_text = clean_val
+                        # 価格系の名前属性（buyingPriceなど）にヒットしたら確定して抜ける
+                        if 'price' in name_attr:
+                            break
+
+        # 【予備ルート】通常のHTMLタグから探す
+        if not price_text:
+            price_selectors = [
+                ('span', {'class': 'a-price-whole'}),
+                ('span', {'class': 'a-color-price'}),
+                ('span', {'id': 'priceblock_ourprice'}),
+                ('span', {'class': 'price-large'})
+            ]
+            for tag, attrs in price_selectors:
+                el = soup.find(tag, attrs)
+                if el and re.sub(r'\D', '', el.text):
+                    price_text = re.sub(r'\D', '', el.text)
+                    break
 
         if not price_text:
             print("ステータス: カートはありますが、価格が読み取れませんでした。")
             return False, 0
 
-        # 数字だけを抽出して整数(int)に変換
-        price_number = int(re.sub(r'\D', '', str(price_text)))
+        # 整数(int)に変換
+        price_number = int(price_text)
         print(f"現在の価格: {price_number}円 (目標: {MAX_PRICE}円以下)")
 
         # 4. 価格の判定
