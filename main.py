@@ -1,7 +1,9 @@
 import sys
 import os
 import time
+import re
 import requests
+from bs4 import BeautifulSoup
 
 # 1. 引数の受け取り
 if len(sys.argv) < 4:
@@ -18,64 +20,81 @@ SCRAPER_API_KEY = os.getenv('SCRAPER_API_KEY')
 INTERVAL_SECONDS = 15
 TOTAL_LOOP_TIME = 60
 
-def extract_asin(url):
-    """URLからAmazonのASIN（商品コード）を抽出する"""
-    import re
-    match = re.search(r'/([A-Z0-9]{10})(?:[/?]|$)', url)
-    if match:
-        return match.group(1)
-    return None
-
 def check_amazon_stock_and_price():
     try:
-        asin = extract_asin(AMAZON_URL)
-        if not asin:
-            print("エラー: URLからASIN(商品コード)が抽出できませんでした。")
-            return False, 0
-            
-        # 💡 Amazon専用エンドポイントを叩く
-        proxy_url = f"https://proxy.scrapeops.io/v1/amazon/?api_key={SCRAPER_API_KEY}&asin={asin}&country=jp"
+        # 💡 【無料プラン確定版】
+        # 有料の /amazon/ をやめて通常の /v1/ に戻し、
+        # js_render=true (JavaScript実行) と bypass=generic (高度な回避) を指定してAmazonの壁を突破します！
+        proxy_url = f"https://proxy.scrapeops.io/v1/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}&country=jp&js_render=true&bypass=generic"
         
-        response = requests.get(proxy_url, timeout=30)
+        # JSレンダリングが入るため、タイムアウトを長めの45秒に設定します
+        response = requests.get(proxy_url, timeout=45)
         
         if response.status_code != 200:
             print(f"身代わりプロキシ経由のアクセス失敗 (Status: {response.status_code})")
             return False, 0
 
-        # 💡 ScrapeOpsのAmazonエンドポイントはJSONを返すため、そのまま辞書型にデコード
-        data = response.json()
+        html_text = response.text
+        soup = BeautifulSoup(html_text, 'html.parser')
         
-        # デバッグ用：念のため返ってきたデータ構造をログに出す
-        # print(f"DEBUG: {data}")
-
-        # 1. 在庫・カートボタン相当のステータスチェック
-        # ScrapeOpsの仕様により、out_of_stock などのフラグが取れます
-        if data.get('out_of_stock') or not data.get('is_buybox_winner', True):
-            # もし明示的に在庫切れ、またはカートが取得できていない場合
-            if data.get('out_of_stock'):
-                print("ステータス: 現在在庫切れです。")
-                return False, 0
-
-        # 2. 価格の取得（ScrapeOpsが自動パースした価格フィールドを参照）
-        # 通常、'price' や 'price_num' などのキーで数値が入ってきます
-        price_number = data.get('price_num') or data.get('price')
-        
-        # 文字列で入ってきた場合の安全な数値化
-        if isinstance(price_number, str):
-            import re
-            price_number = int(re.sub(r'\D', '', price_number))
-
-        if not price_number:
-            print("ステータス: 商品情報は取れましたが、価格が読み取れませんでした。")
+        # Captchaチェック
+        if "api-services-support@amazon.com" in html_text or soup.find('form', action=re.compile(r'/validateCaptcha')):
+            print("⚠️ Captchaが検出されました。自動で次のIPへ切り替えます...")
+            return False, 0
+            
+        # 1. 在庫切れテキストのチェック
+        availability_div = soup.find('div', {'id': 'availability'})
+        if availability_div and "現在在庫切れ" in availability_div.text:
+            print("ステータス: 現在在庫切れです。")
             return False, 0
 
+        # 2. カートボタンのチェック
+        add_to_cart_button = soup.find(['input', 'button', 'a'], {'id': 'add-to-cart-button'})
+        if not add_to_cart_button:
+            add_to_cart_button = soup.find(lambda tag: tag.name in ['input', 'button', 'span', 'a'] and (
+                (tag.get('id') in ['add-to-cart-button', 'add-to-cart-button-ubb', 'smartBuyingAddToCart_feature_div']) or
+                (tag.get('class') and any(cls in tag.get('class') for cls in ['atc-button-element', 'a-button-input']))
+            ))
+
+        if not add_to_cart_button:
+            print("ステータス: カートに入れるボタンがありません。")
+            return False, 0
+
+        # 3. 価格の取得ロジック（通常のHTMLパース）
+        price_text = None
+
+        price_selectors = [
+            ('span', {'class': 'a-price-whole'}),
+            ('span', {'id': 'priceblock_ourprice'}),
+            ('span', {'id': 'priceblock_dealprice'}),
+            ('span', {'class': 'a-color-price'}),
+            ('span', {'class': 'price-large'})
+        ]
+        for tag, attrs in price_selectors:
+            el = soup.find(tag, attrs)
+            if el and re.sub(r'\D', '', el.text):
+                price_text = re.sub(r'\D', '', el.text)
+                break
+
+        if not price_text:
+            price_candidates = re.findall(r'(?:￥|¥)\s*([\d,]+)', html_text)
+            for candidate in price_candidates:
+                num_str = re.sub(r'\D', '', candidate)
+                if num_str and (300 <= int(num_str) <= 200000):
+                    price_text = num_str
+                    break
+
+        if not price_text:
+            print("ステータス: カートはありますが、価格が読み取れませんでした。")
+            return False, 0
+
+        price_number = int(price_text)
         print(f"現在の価格: {price_number}円 (目標: {MAX_PRICE}円以下)")
 
-        # 3. 価格の判定
         if price_number <= MAX_PRICE:
             return True, price_number
         else:
-            print(f"値下がり待ち: 設定金額を超えています。")
+            print(f"値下がり待ち: ボタンはありますが、設定金額を超えています。")
             return False, price_number
 
     except Exception as e:
@@ -98,7 +117,7 @@ def main():
         print("エラー: SCRAPER_API_KEY (ScrapeOps Key) が設定されていません。")
         sys.exit(1)
 
-    print(f"Amazon価格監視スタート（ScrapeOps JSONバイパスモード） ➔ 【{name}】")
+    print(f"Amazon価格監視スタート（ScrapeOps無料枠特化モード） ➔ 【{name}】")
     start_time = time.time()
     
     while (time.time() - start_time) < TOTAL_LOOP_TIME:
