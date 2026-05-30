@@ -126,6 +126,7 @@ def main():
             if not url:
                 continue
                 
+            is_ok, current_price = check_amazon_stock_and_price(url, max_price, name)
             
             if is_ok:
                 send_discord_notification(name, url, current_price, max_price)
