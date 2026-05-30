@@ -14,20 +14,19 @@ AMAZON_URL = sys.argv[1].strip('"\'')
 MAX_PRICE = int(str(sys.argv[2]).strip('"\''))
 name = sys.argv[3].strip('"\'')
 
-# SecretsからDiscordのURLと、ScrapeOpsのAPIキー（変数名はそのまま流用）を読み込み
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-SCRAPER_API_KEY = os.getenv('SCRAPER_API_KEY')
+
+# 💡 【ここに直接貼り付け！】ScrapeOpsからコピーしたAPIキーを直接書き込みます
+SCRAPER_API_KEY = 'ここにScrapeOpsのAPIキーを貼り付け'
 
 INTERVAL_SECONDS = 15
 TOTAL_LOOP_TIME = 60
 
 def check_amazon_stock_and_price():
     try:
-        # 💡 【重要】ScrapeOps専用のエンドポイントURLに変換します
-        # これにより、Amazonには日本の一般家庭からアクセスしているように見えます
+        # ScrapeOps専用のエンドポイントURLに変換
         proxy_url = f"https://proxy.scrapeops.io/v1/?api_key={SCRAPER_API_KEY}&url={AMAZON_URL}"
         
-        # ScrapeOps側が完璧なブラウザヘッダーを自動付与するため、リクエストは最少構成で投げます
         response = requests.get(proxy_url, timeout=30)
         
         if response.status_code != 200:
@@ -37,7 +36,6 @@ def check_amazon_stock_and_price():
         html_text = response.text
         soup = BeautifulSoup(html_text, 'html.parser')
         
-        # Captchaページに飛ばされていないか厳重チェック
         if "api-services-support@amazon.com" in html_text or soup.find('form', action=re.compile(r'/validateCaptcha')):
             print("⚠️ Captchaが検出されました。IPを切り替えて自動再試行します...")
             return False, 0
@@ -60,7 +58,7 @@ def check_amazon_stock_and_price():
             print("ステータス: カートに入れるボタンがありません。")
             return False, 0
 
-        # 3. 価格の取得ロジック（PC・スマホ画面の両対応）
+        # 3. 価格の取得ロジック
         price_text = None
 
         # 【ルートA】通常のHTMLタグから探す
@@ -77,7 +75,7 @@ def check_amazon_stock_and_price():
                 price_text = re.sub(r'\D', '', el.text)
                 break
 
-        # 【ルートB】全体の生テキストから「￥・¥数字」のパターンを直接抽出
+        # 【ルートB】全体の生テキストからスキャン
         if not price_text:
             price_candidates = re.findall(r'(?:￥|¥)\s*([\d,]+)', html_text)
             for candidate in price_candidates:
@@ -117,8 +115,8 @@ def main():
     if not WEBHOOK_URL:
         print("エラー: WEBHOOK_URL が設定されていません。")
         sys.exit(1)
-    if not SCRAPER_API_KEY:
-        print("エラー: SCRAPER_API_KEY (ScrapeOps Key) が設定されていません。")
+    if not SCRAPER_API_KEY or SCRAPER_API_KEY == 'ここにScrapeOpsのAPIキーを貼り付け':
+        print("エラー: SCRAPER_API_KEY が正しくコードに直書きされていません。")
         sys.exit(1)
 
     print(f"Amazon価格監視スタート（ScrapeOpsバイパスモード） ➔ 【{name}】")
