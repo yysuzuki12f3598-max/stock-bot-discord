@@ -27,6 +27,11 @@ jobs:
             name: "ランダムブースター V10", 
             url: "https://www.amazon.co.jp/dp/B0GWKWBXH3", 
             max_price: 1600 
+          },
+          { 
+            name: "テスト", 
+            url: "https://www.amazon.co.jp/dp/B004Y9IXZW", 
+            max_price: 1600 
           }
         ]
 
