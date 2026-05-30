@@ -24,6 +24,5 @@ jobs:
     - name: Run Python Script
       env:
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        AMAZON_URL: ${{ secrets.AMAZON_URL }}
-        MAX_PRICE: ${{ secrets.MAX_PRICE }}
+        WATCH_LIST: ${{ secrets.WATCH_LIST }}
       run: python main.py
