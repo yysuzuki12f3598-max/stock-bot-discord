@@ -3,6 +3,8 @@ name: Amazon Price Monitor
 on:
   schedule:
     - cron: '*/10 * * * *'
+  repository_dispatch:
+    types: [trigger-amazon-monitor]
   workflow_dispatch:
 
 jobs:
