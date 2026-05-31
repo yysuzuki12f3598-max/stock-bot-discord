@@ -31,7 +31,7 @@ jobs:
           { 
             name: "テスト", 
             url: "https://www.amazon.co.jp/dp/B004Y9IXZW", 
-            max_price: 1600 
+            max_price: 99999 
           }
         ]
 
